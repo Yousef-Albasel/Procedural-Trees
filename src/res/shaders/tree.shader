@@ -1,13 +1,9 @@
 #shader vertex
 #version 330 core
 
-layout(location = 0) in vec3 position;
-layout(location = 1) in vec3 normal;
-
-// Instance data (one per branch)
-layout(location = 2) in mat4 instanceTransform;
-layout(location = 6) in vec3 instanceColor;
-layout(location = 7) in float instanceThickness;
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec3 aColor;
 
 out vec3 v_FragPos;
 out vec3 v_Normal;
@@ -17,16 +13,15 @@ uniform mat4 u_View;
 uniform mat4 u_Projection;
 
 void main() {
-    // Transform position and normal by instance matrix
-    vec4 worldPos = instanceTransform * vec4(position, 1.0);
+    // Direct vertex transformation (no instance matrix)
+    vec4 worldPos = vec4(aPos, 1.0);
     v_FragPos = worldPos.xyz;
     
-    // Transform normal (using transpose of inverse for non-uniform scaling)
-    mat3 normalMatrix = mat3(transpose(inverse(instanceTransform)));
-    v_Normal = normalize(normalMatrix * normal);
+    // Direct normal (already in world space)
+    v_Normal = aNormal;
     
-    // Pass through instance color
-    v_Color = instanceColor;
+    // Pass through vertex color
+    v_Color = aColor;
     
     gl_Position = u_Projection * u_View * worldPos;
 }

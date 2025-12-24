@@ -6,7 +6,7 @@ layout(location = 1) in vec2 a_TexCoord;      // UV coordinates
 layout(location = 2) in vec3 a_InstancePos;   // Instance position
 layout(location = 3) in vec3 a_InstanceNormal; // Spherical normal for lighting
 layout(location = 4) in vec2 a_InstanceScale;  // Scale (XY)
-layout(location = 5) in float a_InstanceRotation; // Rotation around normal
+layout(location = 5) in float a_InstanceRotation; // Rotation around view axis
 layout(location = 6) in vec3 a_InstanceColor;  // Color tint
 
 out vec2 v_TexCoord;
@@ -24,18 +24,17 @@ void main() {
     // The spherical normal (points from tree center outward)
     v_Normal = normalize(a_InstanceNormal);
     
-    // Build billboard matrix that faces the camera
-    // Extract camera position from view matrix
-    mat4 invView = inverse(u_View);
-    vec3 cameraRight = vec3(invView[0][0], invView[1][0], invView[2][0]);
-    vec3 cameraUp = vec3(invView[0][1], invView[1][1], invView[2][1]);
+    // Extract camera right and up vectors directly from view matrix
+    // View matrix transforms world to camera space, so we extract the inverse directions
+    vec3 cameraRight = vec3(u_View[0][0], u_View[1][0], u_View[2][0]);
+    vec3 cameraUp = vec3(u_View[0][1], u_View[1][1], u_View[2][1]);
     
-    // Apply rotation around the normal
+    // Apply rotation around the view direction (for variety)
     float cosRot = cos(a_InstanceRotation);
     float sinRot = sin(a_InstanceRotation);
     
-    vec3 rotatedRight = cameraRight * cosRot + cameraUp * sinRot;
-    vec3 rotatedUp = -cameraRight * sinRot + cameraUp * cosRot;
+    vec3 rotatedRight = cameraRight * cosRot - cameraUp * sinRot;
+    vec3 rotatedUp = cameraRight * sinRot + cameraUp * cosRot;
     
     // Scale the vertex
     vec3 scaledPos = a_Position.x * rotatedRight * a_InstanceScale.x
@@ -62,8 +61,6 @@ uniform vec3 u_LightDir;
 
 void main() {
     // Sample the leaf texture
-    // For silhouette textures: white = leaf, black = background
-    // The texture loading code converts this to RGBA with alpha channel
     vec4 texColor = texture(u_LeafTexture, v_TexCoord);
     
     // Alpha test - discard fully transparent pixels
@@ -91,7 +88,6 @@ void main() {
     float lightIntensity = ambient + diffuse * 0.65;
     
     // Use texture color as base, modulate with instance color and lighting
-    // The texture provides the green color, instance color adds variation
     vec3 leafColor = texColor.rgb * v_Color;
     vec3 finalColor = leafColor * lightIntensity;
     

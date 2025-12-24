@@ -1,7 +1,6 @@
 #include "Renderer.h"
 #include "imgui/imgui.h"
 #include <filesystem>
-#include "Vendor/Model.h"
 #include <exception>
 #include <iostream>
 #include <cstring>

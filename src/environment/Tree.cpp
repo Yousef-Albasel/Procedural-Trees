@@ -20,16 +20,13 @@ Tree::Tree()
       leafSize(0.3f),
       leafDensity(0.7f),
       minLeafDepth(3),
-      VAO(0), VBO(0), NBO(0), EBO(0), instanceVBO(0),
+      branchVAO(0), branchVBO(0), branchNBO(0), branchCBO(0), branchEBO(0),
       leafVAO(0), leafVBO(0), leafUVBO(0), leafEBO(0), leafInstanceVBO(0),
-      buffersInitialized(false),
+      branchBuffersInitialized(false),
       leafBuffersInitialized(false),
-      branchCount(0),
-      templateVertexCount(0),
       leafTexture(0),
       position(glm::vec3(0.0f))
 {
-    // Default L-System: Simple branching tree with leaves
     axiom = "F";
     rules['F'] = "F[+F][-F]F";
 }
@@ -41,18 +38,14 @@ Tree::~Tree() {
 void Tree::Init(const glm::vec3& pos) {
     position = pos;
     
-    // Create the template cylinder mesh for branches
-    CreateCylinderTemplate();
-    
-    // Create the template quad mesh for leaves
     CreateLeafQuadTemplate();
     
     // Initialize OpenGL buffers for branches
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &NBO);
-    glGenBuffers(1, &EBO);
-    glGenBuffers(1, &instanceVBO);
+    glGenVertexArrays(1, &branchVAO);
+    glGenBuffers(1, &branchVBO);
+    glGenBuffers(1, &branchNBO);
+    glGenBuffers(1, &branchCBO);
+    glGenBuffers(1, &branchEBO);
     
     // Initialize OpenGL buffers for leaves
     glGenVertexArrays(1, &leafVAO);
@@ -61,284 +54,114 @@ void Tree::Init(const glm::vec3& pos) {
     glGenBuffers(1, &leafEBO);
     glGenBuffers(1, &leafInstanceVBO);
     
-    SetupBuffers();
     SetupLeafBuffers();
     
-    buffersInitialized = true;
+    branchBuffersInitialized = true;
     leafBuffersInitialized = true;
     
     std::cout << "Tree initialized at position: (" 
               << position.x << ", " << position.y << ", " << position.z << ")" << std::endl;
-    std::cout << "Template cylinder: " << templateVertices.size() << " vertices, "
-              << templateIndices.size() << " indices" << std::endl;
-    std::cout << "Leaf quad template created with " << leafQuadVertices.size() << " vertices" << std::endl;
 }
-
-void Tree::CreateCylinderTemplate() {
-    templateVertices.clear();
-    templateNormals.clear();
-    templateIndices.clear();
-    
-    int segments = radialSegments;
-    
-    // Generate vertices around the cylinder
-    for (int i = 0; i <= segments; i++) {
-        float theta = (float)i / segments * 2.0f * glm::pi<float>();
-        float cosTheta = cos(theta);
-        float sinTheta = sin(theta);
-        
-        // Bottom ring (y=0)
-        glm::vec3 pos(cosTheta, 0.0f, sinTheta);
-        templateVertices.push_back(pos);
-        templateNormals.push_back(glm::normalize(glm::vec3(cosTheta, 0.0f, sinTheta)));
-        
-        // Top ring (y=1)
-        pos = glm::vec3(cosTheta, 1.0f, sinTheta);
-        templateVertices.push_back(pos);
-        templateNormals.push_back(glm::normalize(glm::vec3(cosTheta, 0.0f, sinTheta)));
-    }
-    
-    // Generate indices for the cylinder sides
-    unsigned int baseIndex = 0;
-    for (int i = 0; i < segments; i++) {
-        unsigned int base = baseIndex + i * 2;
-        
-        templateIndices.push_back(base);
-        templateIndices.push_back(base + 2);
-        templateIndices.push_back(base + 1);
-        
-        templateIndices.push_back(base + 1);
-        templateIndices.push_back(base + 2);
-        templateIndices.push_back(base + 3);
-    }
-    
-    // Add bottom cap
-    unsigned int centerBottomIndex = templateVertices.size();
-    templateVertices.push_back(glm::vec3(0.0f, 0.0f, 0.0f));
-    templateNormals.push_back(glm::vec3(0.0f, -1.0f, 0.0f));
-    
-    for (int i = 0; i < segments; i++) {
-        unsigned int base = baseIndex + i * 2;
-        templateIndices.push_back(centerBottomIndex);
-        templateIndices.push_back(base);
-        templateIndices.push_back(base + 2);
-    }
-    
-    // Add top cap
-    unsigned int centerTopIndex = templateVertices.size();
-    templateVertices.push_back(glm::vec3(0.0f, 1.0f, 0.0f));
-    templateNormals.push_back(glm::vec3(0.0f, 1.0f, 0.0f));
-    
-    for (int i = 0; i < segments; i++) {
-        unsigned int base = baseIndex + i * 2 + 1;
-        templateIndices.push_back(centerTopIndex);
-        templateIndices.push_back(base + 2);
-        templateIndices.push_back(base);
-    }
-    
-    templateVertexCount = templateIndices.size();
-}
-
-
-// Add this method to Tree.cpp after the Generate() function:
-void Tree::GenerateLeavesAtEndpoints() {
-    std::cout << "Generating leaves at endpoints..." << std::endl;
-    
-    for (const auto& branch : branchInstances) {
-        // Extract radius from the transform matrix (scale component)
-        float radius = glm::length(glm::vec3(branch.transform[0]));
-        
-        // More lenient threshold - adjust to control where leaves appear
-        // Lower value = only thinnest branches, Higher value = more branches get leaves
-        if (radius < initialRadius * 0.25f) {  // Increased from 0.15f
-            
-            // Extract the END position of the branch
-            // The transform is: Translation * Rotation * Scale
-            // Position is in column 3, but we need to add the length
-            glm::vec3 startPos = glm::vec3(branch.transform[3]);
-            
-            // Direction is the Y-axis of the rotation (column 1)
-            glm::vec3 direction = glm::normalize(glm::vec3(branch.transform[1]));
-            
-            // Length is the Y-component of the scale
-            float length = glm::length(glm::vec3(branch.transform[1]));
-            
-            // Calculate the END position of this branch
-            glm::vec3 endPos = startPos + direction * length;
-            
-            // Generate MORE leaves per cluster for denser foliage
-            int leavesPerCluster = 5 + (rand() % 6);  // 5-10 leaves per cluster (was 3-6)
-            
-            for (int i = 0; i < leavesPerCluster; i++) {
-                // Larger offset for more spread-out clusters
-                float offsetDist = leafSize * 1.0f;  // Increased from 0.5f
-                glm::vec3 randomOffset(
-                    ((rand() % 100) / 50.0f - 1.0f) * offsetDist,
-                    ((rand() % 100) / 50.0f - 1.0f) * offsetDist,
-                    ((rand() % 100) / 50.0f - 1.0f) * offsetDist
-                );
-                
-                glm::vec3 leafPos = endPos + randomOffset;  // Use endPos instead of position
-                
-                // Create leaf instance
-                LeafInstance instance;
-                instance.position = leafPos;
-                
-                // Spherical normal for lighting
-                glm::vec3 treeCenter = this->position + glm::vec3(0.0f, initialLength * 2.0f, 0.0f);
-                instance.normal = glm::normalize(leafPos - treeCenter);
-                
-                // Slightly larger leaves for better coverage
-                float scaleVariation = 0.9f + (rand() % 50) / 100.0f;  // 0.9 to 1.4
-                instance.scale = glm::vec2(leafSize * scaleVariation * 1.2f);  // 20% larger
-                
-                // Random rotation
-                instance.rotation = (rand() % 360) * glm::pi<float>() / 180.0f;
-                
-                // Leaf color with variation
-                float colorVariation = 0.85f + (rand() % 30) / 100.0f;  // More variation
-                instance.color = glm::vec3(0.2f, 0.6f, 0.15f) * colorVariation;
-                
-                leafInstances.push_back(instance);
-            }
-        }
-    }
-    
-    std::cout << "Generated " << leafInstances.size() << " leaves at branch endpoints" << std::endl;
-}
-
 
 void Tree::CreateLeafQuadTemplate() {
     leafQuadVertices.clear();
     leafQuadUVs.clear();
     leafQuadIndices.clear();
     
-    // Create a simple quad (two triangles) centered at origin
-    // The quad lies in the XY plane
     leafQuadVertices = {
-        glm::vec3(-0.5f, -0.5f, 0.0f),  // Bottom-left
-        glm::vec3( 0.5f, -0.5f, 0.0f),  // Bottom-right
-        glm::vec3( 0.5f,  0.5f, 0.0f),  // Top-right
-        glm::vec3(-0.5f,  0.5f, 0.0f)   // Top-left
+        glm::vec3(-0.5f, -0.5f, 0.0f),
+        glm::vec3( 0.5f, -0.5f, 0.0f),
+        glm::vec3( 0.5f,  0.5f, 0.0f),
+        glm::vec3(-0.5f,  0.5f, 0.0f)
     };
     
-    // UV coordinates
     leafQuadUVs = {
-        glm::vec2(0.0f, 0.0f),  // Bottom-left
-        glm::vec2(1.0f, 0.0f),  // Bottom-right
-        glm::vec2(1.0f, 1.0f),  // Top-right
-        glm::vec2(0.0f, 1.0f)   // Top-left
+        glm::vec2(0.0f, 0.0f),
+        glm::vec2(1.0f, 0.0f),
+        glm::vec2(1.0f, 1.0f),
+        glm::vec2(0.0f, 1.0f)
     };
     
-    // Indices for two triangles
-    leafQuadIndices = {
-        0, 1, 2,  // First triangle
-        0, 2, 3   // Second triangle
-    };
-}
-
-void Tree::SetupBuffers() {
-    glBindVertexArray(VAO);
-    
-    // Vertex positions
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, templateVertices.size() * sizeof(glm::vec3), 
-                 templateVertices.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
-    glEnableVertexAttribArray(0);
-    
-    // Normals
-    glBindBuffer(GL_ARRAY_BUFFER, NBO);
-    glBufferData(GL_ARRAY_BUFFER, templateNormals.size() * sizeof(glm::vec3), 
-                 templateNormals.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
-    glEnableVertexAttribArray(1);
-    
-    // Indices
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, templateIndices.size() * sizeof(unsigned int), 
-                 templateIndices.data(), GL_STATIC_DRAW);
-    
-    // Instance buffer
-    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-    
-    // Instance matrix (4 vec4s for mat4)
-    for (int i = 0; i < 4; i++) {
-        glVertexAttribPointer(2 + i, 4, GL_FLOAT, GL_FALSE, sizeof(BranchInstance), 
-                             (void*)(i * sizeof(glm::vec4)));
-        glEnableVertexAttribArray(2 + i);
-        glVertexAttribDivisor(2 + i, 1);
-    }
-    
-    // Instance color
-    glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, sizeof(BranchInstance), 
-                         (void*)(offsetof(BranchInstance, color)));
-    glEnableVertexAttribArray(6);
-    glVertexAttribDivisor(6, 1);
-    
-    // Instance thickness
-    glVertexAttribPointer(7, 1, GL_FLOAT, GL_FALSE, sizeof(BranchInstance), 
-                         (void*)(offsetof(BranchInstance, thickness)));
-    glEnableVertexAttribArray(7);
-    glVertexAttribDivisor(7, 1);
-    
-    glBindVertexArray(0);
+    leafQuadIndices = { 0, 1, 2, 0, 2, 3 };
 }
 
 void Tree::SetupLeafBuffers() {
     glBindVertexArray(leafVAO);
     
-    // Vertex positions (quad template)
     glBindBuffer(GL_ARRAY_BUFFER, leafVBO);
     glBufferData(GL_ARRAY_BUFFER, leafQuadVertices.size() * sizeof(glm::vec3), 
                  leafQuadVertices.data(), GL_STATIC_DRAW);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
     glEnableVertexAttribArray(0);
     
-    // UV coordinates
     glBindBuffer(GL_ARRAY_BUFFER, leafUVBO);
     glBufferData(GL_ARRAY_BUFFER, leafQuadUVs.size() * sizeof(glm::vec2), 
                  leafQuadUVs.data(), GL_STATIC_DRAW);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), (void*)0);
     glEnableVertexAttribArray(1);
     
-    // Indices
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, leafEBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, leafQuadIndices.size() * sizeof(unsigned int), 
                  leafQuadIndices.data(), GL_STATIC_DRAW);
     
-    // Instance buffer for leaf data
     glBindBuffer(GL_ARRAY_BUFFER, leafInstanceVBO);
     
-    // Instance position (vec3)
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(LeafInstance), 
                          (void*)offsetof(LeafInstance, position));
     glEnableVertexAttribArray(2);
     glVertexAttribDivisor(2, 1);
     
-    // Instance normal (vec3) - spherical normal for lighting
     glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(LeafInstance), 
                          (void*)offsetof(LeafInstance, normal));
     glEnableVertexAttribArray(3);
     glVertexAttribDivisor(3, 1);
     
-    // Instance scale (vec2)
     glVertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, sizeof(LeafInstance), 
                          (void*)offsetof(LeafInstance, scale));
     glEnableVertexAttribArray(4);
     glVertexAttribDivisor(4, 1);
     
-    // Instance rotation (float)
     glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, sizeof(LeafInstance), 
                          (void*)offsetof(LeafInstance, rotation));
     glEnableVertexAttribArray(5);
     glVertexAttribDivisor(5, 1);
     
-    // Instance color (vec3)
     glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, sizeof(LeafInstance), 
                          (void*)offsetof(LeafInstance, color));
     glEnableVertexAttribArray(6);
     glVertexAttribDivisor(6, 1);
+    
+    glBindVertexArray(0);
+}
+
+void Tree::SetupBranchBuffers() {
+    glBindVertexArray(branchVAO);
+    
+    // Vertex positions
+    glBindBuffer(GL_ARRAY_BUFFER, branchVBO);
+    glBufferData(GL_ARRAY_BUFFER, branchVertices.size() * sizeof(glm::vec3), 
+                 branchVertices.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glEnableVertexAttribArray(0);
+    
+    // Normals
+    glBindBuffer(GL_ARRAY_BUFFER, branchNBO);
+    glBufferData(GL_ARRAY_BUFFER, branchNormals.size() * sizeof(glm::vec3), 
+                 branchNormals.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glEnableVertexAttribArray(1);
+    
+    // Colors
+    glBindBuffer(GL_ARRAY_BUFFER, branchCBO);
+    glBufferData(GL_ARRAY_BUFFER, branchColors.size() * sizeof(glm::vec3), 
+                 branchColors.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glEnableVertexAttribArray(2);
+    
+    // Indices
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, branchEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, branchIndices.size() * sizeof(unsigned int), 
+                 branchIndices.data(), GL_STATIC_DRAW);
     
     glBindVertexArray(0);
 }
@@ -348,20 +171,22 @@ void Tree::AddRule(char symbol, const std::string& replacement) {
 }
 
 void Tree::InterpretLSystemRecursive(char symbol, int depth, int maxDepth, 
-                                     TurtleState& turtle, std::stack<TurtleState>& stack) {
+                                     TurtleState& turtle, std::stack<TurtleState>& stack,
+                                     int currentSegmentIndex) {
     bool shouldExpand = (depth < maxDepth) && (rules.find(symbol) != rules.end());
     
     if (shouldExpand) {
         const std::string& replacement = rules[symbol];
         for (char c : replacement) {
-            InterpretLSystemRecursive(c, depth + 1, maxDepth, turtle, stack);
+            InterpretLSystemRecursive(c, depth + 1, maxDepth, turtle, stack, currentSegmentIndex);
         }
     } else {
-        InterpretSymbol(symbol, turtle, stack);
+        InterpretSymbol(symbol, turtle, stack, currentSegmentIndex);
     }
 }
 
-void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>& stack) {
+void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>& stack,
+                           int& currentSegmentIndex) {
     switch (c) {
         case 'F': 
         case 'X': {
@@ -372,7 +197,6 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
                 break;
             }
             
-            // Draw forward and create branch instance
             glm::vec3 endPos = turtle.position + turtle.direction * turtle.length;
             float endRadius = turtle.radius * radiusScale;
             
@@ -380,25 +204,27 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
                 endRadius = 0.01f;
             }
             
-            GenerateBranchInstance(turtle.position, endPos, turtle.radius, endRadius, turtle.depth);
+            // Create branch segment
+            BranchSegment segment;
+            segment.startPos = turtle.position;
+            segment.endPos = endPos;
+            segment.startRadius = turtle.radius;
+            segment.endRadius = endRadius;
+            segment.depth = turtle.depth;
+            segment.parentIndex = currentSegmentIndex;
+            
+            // Add to parent's children
+            if (currentSegmentIndex >= 0 && currentSegmentIndex < branchSegments.size()) {
+                branchSegments[currentSegmentIndex].childIndices.push_back(branchSegments.size());
+            }
+            
+            currentSegmentIndex = branchSegments.size();
+            branchSegments.push_back(segment);
             
             turtle.position = endPos;
             turtle.radius = endRadius;
             turtle.length *= lengthScale;
             turtle.depth++;
-            branchCount++;
-            break;
-        }
-        
-        case 'L': {
-            // Generate leaf at current position
-            // Only add leaves if depth is sufficient and random chance succeeds
-            if (turtle.depth >= minLeafDepth) {
-                float randomChance = (rand() % 100) / 100.0f;
-                if (randomChance < leafDensity) {
-                    GenerateLeafInstance(turtle.position, turtle.direction, turtle);
-                }
-            }
             break;
         }
         
@@ -447,6 +273,7 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
         
         case '[': {
             stack.push(turtle);
+            segmentIndexStack.push(currentSegmentIndex);
             break;
         }
         
@@ -455,13 +282,17 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
                 turtle = stack.top();
                 stack.pop();
             }
+            if (!segmentIndexStack.empty()) {
+                currentSegmentIndex = segmentIndexStack.top();
+                segmentIndexStack.pop();
+            }
             break;
         }
     }
 }
 
 void Tree::Generate(int iterations) {
-    std::cout << "Generating tree with " << iterations << " iterations..." << std::endl;
+    std::cout << "Generating continuous mesh tree with " << iterations << " iterations..." << std::endl;
     
     const int MAX_SAFE_ITERATIONS = 10;
     if (iterations > MAX_SAFE_ITERATIONS) {
@@ -470,10 +301,15 @@ void Tree::Generate(int iterations) {
     }
     
     // Clear previous data
-    branchInstances.clear();
+    branchSegments.clear();
     leafInstances.clear();
-    stateStack.clear();
-    branchCount = 0;
+    branchVertices.clear();
+    branchNormals.clear();
+    branchColors.clear();
+    branchIndices.clear();
+    
+    // Clear stacks
+    while (!segmentIndexStack.empty()) segmentIndexStack.pop();
     
     std::cout << "Axiom: " << axiom << std::endl;
     std::cout << "Rules: " << std::endl;
@@ -492,111 +328,211 @@ void Tree::Generate(int iterations) {
     turtle.depth = 0;
     
     std::stack<TurtleState> stack;
+    int currentSegmentIndex = -1;
     
-    std::cout << "Interpreting L-System recursively..." << std::endl;
+    std::cout << "Interpreting L-System..." << std::endl;
     
     for (char c : axiom) {
-        InterpretLSystemRecursive(c, 0, iterations, turtle, stack);
+        InterpretLSystemRecursive(c, 0, iterations, turtle, stack, currentSegmentIndex);
     }
     
-    std::cout << "Branch instances created: " << branchInstances.size() << std::endl;
+    std::cout << "Branch segments created: " << branchSegments.size() << std::endl;
+    
+    // Generate continuous mesh from segments
+    GenerateContinuousMesh();
+    
+    std::cout << "Continuous mesh: " << branchVertices.size() << " vertices, "
+              << branchIndices.size() / 3 << " triangles" << std::endl;
+    
+    // Generate leaves
     GenerateLeavesAtEndpoints();
-
     std::cout << "Leaf instances created: " << leafInstances.size() << std::endl;
     
     // Update buffers
-    if (buffersInitialized) {
-        UpdateInstanceBuffer();
+    if (branchBuffersInitialized) {
+        SetupBranchBuffers();
     }
     if (leafBuffersInitialized) {
         UpdateLeafInstanceBuffer();
     }
     
-    std::cout << "Tree generated: " << branchCount << " branches, " 
-              << leafInstances.size() << " leaves" << std::endl;
+    std::cout << "Tree generation complete!" << std::endl;
 }
 
-void Tree::GenerateBranchInstance(const glm::vec3& start, const glm::vec3& end,
-                                  float startRadius, float endRadius, int depth) {
-    BranchInstance instance;
-    
-    glm::vec3 direction = end - start;
-    float length = glm::length(direction);
-    
-    if (length < 0.001f) return;
-    
-    direction = glm::normalize(direction);
-    
-    // Build rotation matrix
+void Tree::CreateVertexRing(const glm::vec3& center, const glm::vec3& direction,
+                           float radius, std::vector<glm::vec3>& outVertices,
+                           std::vector<glm::vec3>& outNormals) {
+    // Build orthogonal basis
     glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::mat4 rotation;
+    glm::vec3 right;
     
     if (abs(glm::dot(direction, up)) > 0.999f) {
-        rotation = glm::mat4(1.0f);
-        if (direction.y < 0) {
-            rotation = glm::rotate(glm::mat4(1.0f), glm::pi<float>(), glm::vec3(1.0f, 0.0f, 0.0f));
-        }
+        right = glm::vec3(1.0f, 0.0f, 0.0f);
     } else {
-        glm::vec3 right = glm::normalize(glm::cross(direction, glm::vec3(0.0f, 0.0f, 1.0f)));
+        right = glm::normalize(glm::cross(direction, glm::vec3(0.0f, 0.0f, 1.0f)));
         if (glm::length(right) < 0.01f) {
             right = glm::normalize(glm::cross(direction, glm::vec3(1.0f, 0.0f, 0.0f)));
         }
-        glm::vec3 newUp = glm::cross(right, direction);
-        
-        rotation = glm::mat4(
-            glm::vec4(right, 0.0f),
-            glm::vec4(direction, 0.0f),
-            glm::vec4(newUp, 0.0f),
-            glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
-        );
     }
     
-    glm::mat4 translation = glm::translate(glm::mat4(1.0f), start);
-    glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(startRadius, length, startRadius));
+    glm::vec3 newUp = glm::cross(right, direction);
     
-    instance.transform = translation * rotation * scale;
+    // Generate ring of vertices
+    for (int i = 0; i <= radialSegments; i++) {
+        float theta = (float)i / radialSegments * 2.0f * glm::pi<float>();
+        float cosTheta = cos(theta);
+        float sinTheta = sin(theta);
+        
+        glm::vec3 offset = right * cosTheta + newUp * sinTheta;
+        glm::vec3 normal = glm::normalize(offset);
+        glm::vec3 vertex = center + offset * radius;
+        
+        outVertices.push_back(vertex);
+        outNormals.push_back(normal);
+    }
+}
+
+void Tree::ConnectRings(int startRingIndex, int endRingIndex,
+                       std::vector<unsigned int>& indices) {
+    int vertsPerRing = radialSegments + 1;
     
+    for (int i = 0; i < radialSegments; i++) {
+        unsigned int bottomLeft = startRingIndex + i;
+        unsigned int bottomRight = startRingIndex + i + 1;
+        unsigned int topLeft = endRingIndex + i;
+        unsigned int topRight = endRingIndex + i + 1;
+        
+        // First triangle
+        indices.push_back(bottomLeft);
+        indices.push_back(bottomRight);
+        indices.push_back(topLeft);
+        
+        // Second triangle
+        indices.push_back(topLeft);
+        indices.push_back(bottomRight);
+        indices.push_back(topRight);
+    }
+}
+
+glm::vec3 Tree::CalculateBranchColor(int depth, float radiusRatio) {
     float depthFactor = 1.0f - (depth * 0.05f);
     depthFactor = glm::clamp(depthFactor, 0.5f, 1.0f);
-    instance.color = glm::vec3(0.4f, 0.25f, 0.15f) * depthFactor;
     
-    instance.thickness = endRadius / startRadius;
-    
-    branchInstances.push_back(instance);
+    glm::vec3 baseColor = glm::vec3(0.4f, 0.25f, 0.15f);
+    return baseColor * depthFactor;
 }
 
-void Tree::GenerateLeafInstance(const glm::vec3& leafPos, const glm::vec3& direction, 
-                                const TurtleState& turtle) {
-    LeafInstance instance;
+void Tree::GenerateContinuousMesh() {
+    if (branchSegments.empty()) return;
     
-    instance.position = leafPos;
+    std::cout << "Building continuous mesh from " << branchSegments.size() << " segments..." << std::endl;
     
-    // Calculate spherical normal pointing outward from tree center
-    // This creates the "volume lighting" effect
-    glm::vec3 treeCenter = position + glm::vec3(0.0f, initialLength * 2.0f, 0.0f);
-    instance.normal = glm::normalize(leafPos - treeCenter);
+    // Store ring start indices for each segment
+    std::vector<int> segmentStartRings(branchSegments.size(), -1);
+    std::vector<int> segmentEndRings(branchSegments.size(), -1);
     
-    // Random scale variation
-    float scaleVariation = 0.8f + (rand() % 40) / 100.0f;  // 0.8 to 1.2
-    instance.scale = glm::vec2(leafSize * scaleVariation);
+    // Map to track shared junction vertices (position -> vertex ring index)
+    std::map<std::tuple<float, float, float>, int> junctionRings;
     
-    // Random rotation for variety
-    instance.rotation = (rand() % 360) * glm::pi<float>() / 180.0f;
+    auto positionKey = [](const glm::vec3& pos) {
+        float precision = 1000.0f; // Round to 3 decimal places
+        return std::make_tuple(
+            std::round(pos.x * precision) / precision,
+            std::round(pos.y * precision) / precision,
+            std::round(pos.z * precision) / precision
+        );
+    };
     
-    // Leaf color with slight variation
-    float colorVariation = 0.9f + (rand() % 20) / 100.0f;  // 0.9 to 1.1
-    instance.color = glm::vec3(0.2f, 0.6f, 0.15f) * colorVariation;
+    // Generate rings for each segment, reusing junction vertices
+    for (size_t i = 0; i < branchSegments.size(); i++) {
+        const BranchSegment& seg = branchSegments[i];
+        
+        glm::vec3 direction = glm::normalize(seg.endPos - seg.startPos);
+        
+        // Check if start position already has a ring (junction vertex sharing)
+        auto startKey = positionKey(seg.startPos);
+        auto startIt = junctionRings.find(startKey);
+        
+        if (startIt != junctionRings.end() && seg.parentIndex >= 0) {
+            // Reuse parent's end ring as our start ring
+            segmentStartRings[i] = startIt->second;
+        } else {
+            // Create new start ring
+            segmentStartRings[i] = branchVertices.size() / (radialSegments + 1);
+            CreateVertexRing(seg.startPos, direction, seg.startRadius, branchVertices, branchNormals);
+            
+            glm::vec3 startColor = CalculateBranchColor(seg.depth, seg.startRadius / initialRadius);
+            for (int j = 0; j <= radialSegments; j++) {
+                branchColors.push_back(startColor);
+            }
+            
+            junctionRings[startKey] = segmentStartRings[i];
+        }
+        
+        // Always create end ring (might be reused by children)
+        segmentEndRings[i] = branchVertices.size() / (radialSegments + 1);
+        CreateVertexRing(seg.endPos, direction, seg.endRadius, branchVertices, branchNormals);
+        
+        glm::vec3 endColor = CalculateBranchColor(seg.depth + 1, seg.endRadius / initialRadius);
+        for (int j = 0; j <= radialSegments; j++) {
+            branchColors.push_back(endColor);
+        }
+        
+        // Register end ring for potential reuse
+        auto endKey = positionKey(seg.endPos);
+        junctionRings[endKey] = segmentEndRings[i];
+    }
     
-    leafInstances.push_back(instance);
+    // Connect rings within each segment
+    for (size_t i = 0; i < branchSegments.size(); i++) {
+        int startRing = segmentStartRings[i] * (radialSegments + 1);
+        int endRing = segmentEndRings[i] * (radialSegments + 1);
+        
+        ConnectRings(startRing, endRing, branchIndices);
+    }
+    
+    std::cout << "Mesh generation complete: " << branchVertices.size() << " vertices" << std::endl;
 }
 
-void Tree::UpdateInstanceBuffer() {
-    if (branchInstances.empty()) return;
+void Tree::GenerateLeavesAtEndpoints() {
+    std::cout << "Generating leaves at endpoints..." << std::endl;
     
-    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-    glBufferData(GL_ARRAY_BUFFER, branchInstances.size() * sizeof(BranchInstance),
-                 branchInstances.data(), GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    for (const auto& segment : branchSegments) {
+        // Only add leaves to thin branches (endpoints)
+        if (segment.endRadius < initialRadius * 0.25f) {
+            
+            int leavesPerCluster = 5 + (rand() % 6);
+            
+            for (int i = 0; i < leavesPerCluster; i++) {
+                float offsetDist = leafSize * 1.0f;
+                glm::vec3 randomOffset(
+                    ((rand() % 100) / 50.0f - 1.0f) * offsetDist,
+                    ((rand() % 100) / 50.0f - 1.0f) * offsetDist,
+                    ((rand() % 100) / 50.0f - 1.0f) * offsetDist
+                );
+                
+                glm::vec3 leafPos = segment.endPos + randomOffset;
+                
+                LeafInstance instance;
+                instance.position = leafPos;
+                
+                glm::vec3 treeCenter = this->position + glm::vec3(0.0f, initialLength * 2.0f, 0.0f);
+                instance.normal = glm::normalize(leafPos - treeCenter);
+                
+                float scaleVariation = 0.9f + (rand() % 50) / 100.0f;
+                instance.scale = glm::vec2(leafSize * scaleVariation * 1.2f);
+                
+                instance.rotation = (rand() % 360) * glm::pi<float>() / 180.0f;
+                
+                float colorVariation = 0.85f + (rand() % 30) / 100.0f;
+                instance.color = glm::vec3(0.2f, 0.6f, 0.15f) * colorVariation;
+                
+                leafInstances.push_back(instance);
+            }
+        }
+    }
+    
+    std::cout << "Generated " << leafInstances.size() << " leaves" << std::endl;
 }
 
 void Tree::UpdateLeafInstanceBuffer() {
@@ -609,7 +545,6 @@ void Tree::UpdateLeafInstanceBuffer() {
 }
 
 void Tree::LoadLeafTexture(const std::string& texturePath) {
-    // Delete old texture if it exists
     if (leafTexture != 0) {
         glDeleteTextures(1, &leafTexture);
     }
@@ -617,25 +552,19 @@ void Tree::LoadLeafTexture(const std::string& texturePath) {
     glGenTextures(1, &leafTexture);
     glBindTexture(GL_TEXTURE_2D, leafTexture);
     
-    // Set texture parameters
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     
-    // Load image
     int width, height, nrChannels;
     stbi_set_flip_vertically_on_load(true);
     unsigned char* data = stbi_load(texturePath.c_str(), &width, &height, &nrChannels, 0);
     
     if (data) {
-        // Check if we need to convert black/white to alpha
         bool needsConversion = (nrChannels == 1 || nrChannels == 3);
         
         if (needsConversion) {
-            std::cout << "Converting silhouette texture to RGBA with alpha..." << std::endl;
-            
-            // Create RGBA buffer
             int pixelCount = width * height;
             unsigned char* rgbaData = new unsigned char[pixelCount * 4];
             
@@ -643,36 +572,30 @@ void Tree::LoadLeafTexture(const std::string& texturePath) {
                 unsigned char value;
                 
                 if (nrChannels == 1) {
-                    // Grayscale
                     value = data[i];
                 } else {
-                    // RGB - use average
                     value = (data[i * 3] + data[i * 3 + 1] + data[i * 3 + 2]) / 3;
                 }
                 
-                // White leaf on black background: white = opaque, black = transparent
-                rgbaData[i * 4 + 0] = 60;   // R - dark green
-                rgbaData[i * 4 + 1] = 120;  // G - green
-                rgbaData[i * 4 + 2] = 40;   // B - dark green
-                rgbaData[i * 4 + 3] = value; // A - white becomes opaque, black becomes transparent
+                rgbaData[i * 4 + 0] = 60;
+                rgbaData[i * 4 + 1] = 120;
+                rgbaData[i * 4 + 2] = 40;
+                rgbaData[i * 4 + 3] = value;
             }
             
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgbaData);
             delete[] rgbaData;
             
         } else {
-            // Already has alpha channel
             GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
             glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
         }
         
         glGenerateMipmap(GL_TEXTURE_2D);
         
-        std::cout << "Loaded leaf texture: " << texturePath << " (" << width << "x" << height << ", " 
-                  << nrChannels << " channels)" << std::endl;
+        std::cout << "Loaded leaf texture: " << texturePath << std::endl;
     } else {
         std::cerr << "Failed to load leaf texture: " << texturePath << std::endl;
-        std::cerr << "Make sure the file exists at: " << texturePath << std::endl;
     }
     
     stbi_image_free(data);
@@ -680,7 +603,7 @@ void Tree::LoadLeafTexture(const std::string& texturePath) {
 }
 
 void Tree::Render(Shader& shader, const glm::mat4& view, const glm::mat4& projection) {
-    if (!buffersInitialized || branchInstances.empty()) return;
+    if (!branchBuffersInitialized || branchVertices.empty()) return;
     
     shader.Bind();
     
@@ -690,14 +613,18 @@ void Tree::Render(Shader& shader, const glm::mat4& view, const glm::mat4& projec
     glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, 0.8f, -0.5f));
     shader.SetUniform3f("u_LightDir", lightDir.x, lightDir.y, lightDir.z);
     
-    glBindVertexArray(VAO);
-    glDrawElementsInstanced(GL_TRIANGLES, templateVertexCount, GL_UNSIGNED_INT, 0, 
-                           branchInstances.size());
+    // Enable polygon offset to reduce Z-fighting
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    glPolygonOffset(1.0f, 1.0f);
+    
+    glBindVertexArray(branchVAO);
+    glDrawElements(GL_TRIANGLES, branchIndices.size(), GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
+    
+    glDisable(GL_POLYGON_OFFSET_FILL);
     
     shader.Unbind();
 }
-
 void Tree::RenderLeaves(Shader& leafShader, const glm::mat4& view, const glm::mat4& projection) {
     if (!leafBuffersInitialized || leafInstances.empty()) return;
     
@@ -706,21 +633,16 @@ void Tree::RenderLeaves(Shader& leafShader, const glm::mat4& view, const glm::ma
     leafShader.setUniformMat4f("u_View", view);
     leafShader.setUniformMat4f("u_Projection", projection);
     
-    // Light direction
     glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, 0.8f, -0.5f));
     leafShader.SetUniform3f("u_LightDir", lightDir.x, lightDir.y, lightDir.z);
     
-    // Bind leaf texture
     if (leafTexture != 0) {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, leafTexture);
         leafShader.SetUniform1i("u_LeafTexture", 0);
     }
     
-    // Disable backface culling for double-sided leaves
     glDisable(GL_CULL_FACE);
-    
-    // Enable alpha blending
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
@@ -729,7 +651,6 @@ void Tree::RenderLeaves(Shader& leafShader, const glm::mat4& view, const glm::ma
                            leafInstances.size());
     glBindVertexArray(0);
     
-    // Restore state
     glEnable(GL_CULL_FACE);
     glDisable(GL_BLEND);
     
@@ -737,13 +658,13 @@ void Tree::RenderLeaves(Shader& leafShader, const glm::mat4& view, const glm::ma
 }
 
 void Tree::Clean() {
-    if (buffersInitialized) {
-        glDeleteVertexArrays(1, &VAO);
-        glDeleteBuffers(1, &VBO);
-        glDeleteBuffers(1, &NBO);
-        glDeleteBuffers(1, &EBO);
-        glDeleteBuffers(1, &instanceVBO);
-        buffersInitialized = false;
+    if (branchBuffersInitialized) {
+        glDeleteVertexArrays(1, &branchVAO);
+        glDeleteBuffers(1, &branchVBO);
+        glDeleteBuffers(1, &branchNBO);
+        glDeleteBuffers(1, &branchCBO);
+        glDeleteBuffers(1, &branchEBO);
+        branchBuffersInitialized = false;
     }
     
     if (leafBuffersInitialized) {
@@ -760,12 +681,11 @@ void Tree::Clean() {
         leafTexture = 0;
     }
     
-    templateVertices.clear();
-    templateNormals.clear();
-    templateIndices.clear();
-    leafQuadVertices.clear();
-    leafQuadUVs.clear();
-    leafQuadIndices.clear();
-    branchInstances.clear();
+    branchSegments.clear();
+    branchVertices.clear();
+    branchNormals.clear();
+    branchColors.clear();
+    branchIndices.clear();
     leafInstances.clear();
+    leafQuadVertices.clear();
 }

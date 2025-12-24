@@ -37,26 +37,21 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vendor/imgui
     ${CMAKE_CURRENT_SOURCE_DIR}/dep/glfw/include
     ${CMAKE_CURRENT_SOURCE_DIR}/dep/glew/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/dep/enet-1.3.18/include
     ${CMAKE_CURRENT_SOURCE_DIR}/dep/
-    ${CMAKE_CURRENT_SOURCE_DIR}/dep/Assimp/include
 )
 
 # Specify full paths to libraries
 set(GLFW3_LIB "${CMAKE_CURRENT_SOURCE_DIR}/dep/glfw/lib/glfw3.lib")
 set(GLEW_LIB "${CMAKE_CURRENT_SOURCE_DIR}/dep/glew/lib/Release/Win32/glew32s.lib")
 
-set(ASSIMP_LIB "${CMAKE_CURRENT_SOURCE_DIR}/dep/Assimp/lib/Release/assimp-vc143-mt.lib")
 # Link libraries with full paths
 target_link_libraries(${PROJECT_NAME}
     ${GLFW3_LIB}
     ${GLEW_LIB}
-    ${ASSIMP_LIB}
     opengl32
     User32
     Gdi32
     Shell32
-    ${CMAKE_CURRENT_SOURCE_DIR}/dep/enet-1.3.18/enet.lib
     Ws2_32
     Winmm
 )
@@ -81,9 +76,3 @@ if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 4)  # Only for 32-bit MSVC builds
     # Disable SAFESEH
     target_link_options(${PROJECT_NAME} PRIVATE "/SAFESEH:NO")
 endif()
-
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_CURRENT_SOURCE_DIR}/dep/Assimp/bin/Release/assimp-vc143-mt.dll"
-    $<TARGET_FILE_DIR:${PROJECT_NAME}>
-)
