@@ -1,0 +1,40 @@
+[PRESET]
+Name=Simple Binary Tree
+Axiom=X
+Iterations=5
+BranchAngle=22.5
+LengthScale=0.95
+RadiusScale=0.88
+LeafSize=0.3
+LeafDensity=0.8
+MinLeafDepth=3
+Rule=X:FF[+XL][-XL][&XL][^XXL]FXL
+Rule=F:F
+[END]
+
+[PRESET]
+Name=Dense Foliage
+Axiom=F
+Iterations=4
+BranchAngle=30.0
+LengthScale=0.85
+RadiusScale=0.82
+LeafSize=0.25
+LeafDensity=0.9
+MinLeafDepth=2
+Rule=F:F[&FL][/FL][\FL][^FL]
+[END]
+
+[PRESET]
+Name=Asymmetric Natural
+Axiom=X
+Iterations=5
+BranchAngle=22.5
+LengthScale=0.92
+RadiusScale=0.88
+LeafSize=0.3
+LeafDensity=0.75
+MinLeafDepth=3
+Rule=X:F-[[XL]+XL]+F[+FX]-XL
+Rule=F:FF
+[END]
