@@ -88,7 +88,7 @@ private:
     void ConnectRings(int startRingIndex, int endRingIndex,
                      std::vector<unsigned int>& indices);
     glm::vec3 CalculateBranchColor(int depth, float radiusRatio);
-    
+    void CalculateSegmentRadii();
     // Leaf generation
     void GenerateLeavesAtEndpoints();
     void CreateLeafQuadTemplate();

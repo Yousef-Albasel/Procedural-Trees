@@ -57,7 +57,7 @@ void Renderer::Init() {
     tree->SetMinLeafDepth(minLeafDepth);
     
     // Load leaf texture (black background, white leaf silhouette)
-    tree->LoadLeafTexture("../src/res/leaf.jpg");
+    tree->LoadLeafTexture("../src/res/leaves.jpg");
     
     ApplyCurrentRules();
     tree->Generate(treeIterations);

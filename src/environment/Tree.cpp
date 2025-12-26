@@ -15,7 +15,7 @@ Tree::Tree()
       lengthScale(0.90f),
       radiusScale(0.88f),
       initialLength(4.0f),
-      initialRadius(0.35f),
+      initialRadius(0.65f),
       radialSegments(8),
       leafSize(0.3f),
       leafDensity(0.7f),
@@ -274,6 +274,7 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
         case '[': {
             stack.push(turtle);
             segmentIndexStack.push(currentSegmentIndex);
+            turtle.radius *= 0.7f;
             break;
         }
         
@@ -625,6 +626,8 @@ void Tree::Render(Shader& shader, const glm::mat4& view, const glm::mat4& projec
     
     shader.Unbind();
 }
+
+
 void Tree::RenderLeaves(Shader& leafShader, const glm::mat4& view, const glm::mat4& projection) {
     if (!leafBuffersInitialized || leafInstances.empty()) return;
     
