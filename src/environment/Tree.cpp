@@ -23,9 +23,9 @@ Tree::Tree()
       lengthRandomness(0.1f),
       tropism(0.0f, -0.2f, 0.0f),
       branchProbability(1.0f),
-      divergenceAngle1(137.5f),   // ADD - golden angle default
-      divergenceAngle2(90.0f),    // ADD - secondary angle
-      divergenceCounter(0),       // ADD
+      divergenceAngle1(137.5f),  
+      divergenceAngle2(90.0f),    
+      divergenceCounter(0),       
       leafSize(0.3f),
       leafDensity(0.7f),
       minLeafDepth(3),
@@ -281,7 +281,27 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
             }
             break;
         }
-        
+        case 'B': {
+           // Apply divergence angle 1 rotation around growth axis
+            float divAngleRad = glm::radians(divergenceAngle1);
+            glm::vec3 axis = glm::normalize(turtle.direction);
+            turtle.direction = glm::rotate(turtle.direction, divAngleRad, axis);
+            turtle.right = glm::rotate(turtle.right, divAngleRad, axis);
+            turtle.up = glm::rotate(turtle.up, divAngleRad, axis);
+            break;
+        }
+
+        case 'E': {
+            // Apply divergence angle 2 rotation around growth axis
+            float divAngleRad = glm::radians(divergenceAngle2);
+            glm::vec3 axis = glm::normalize(turtle.direction);
+            turtle.direction = glm::rotate(turtle.direction, divAngleRad, axis);
+            turtle.right = glm::rotate(turtle.right, divAngleRad, axis);
+            turtle.up = glm::rotate(turtle.up, divAngleRad, axis);
+            break;
+        }
+        case 'L':
+            break;
         case 'F': 
         case 'X': {
             // Check for branch probability
@@ -318,7 +338,6 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
             segment.depth = turtle.depth;
             segment.parentIndex = currentSegmentIndex;
             
-            // Add to parent's children
             if (currentSegmentIndex >= 0 && currentSegmentIndex < branchSegments.size()) {
                 branchSegments[currentSegmentIndex].childIndices.push_back(branchSegments.size());
             }
@@ -385,18 +404,6 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
         case '[': {
             stack.push(turtle);
             segmentIndexStack.push(currentSegmentIndex);
-            
-            // ADD THIS BLOCK - Apply divergence rotation before branching
-            float divAngle = (turtle.divergenceIndex % 2 == 0) ? divergenceAngle1 : divergenceAngle2;
-            float divAngleRad = glm::radians(divAngle);
-            turtle.direction = glm::rotate(turtle.direction, divAngleRad, 
-                                        glm::normalize(turtle.direction));
-            turtle.right = glm::rotate(turtle.right, divAngleRad, 
-                                    glm::normalize(turtle.direction));
-            turtle.up = glm::rotate(turtle.up, divAngleRad, 
-                                glm::normalize(turtle.direction));
-            turtle.divergenceIndex++;
-            
             break;
         }
         

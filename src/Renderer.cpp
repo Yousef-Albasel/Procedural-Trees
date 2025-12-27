@@ -99,8 +99,8 @@ void Renderer::Render() {
         tree->SetLeafSize(leafSize);
         tree->SetLeafDensity(leafDensity);
         tree->SetMinLeafDepth(minLeafDepth);
-        tree->SetDivergenceAngle1(treeDivergenceAngle1);  // ADD
-        tree->SetDivergenceAngle2(treeDivergenceAngle2);  // ADD
+        tree->SetDivergenceAngle1(treeDivergenceAngle1);  
+        tree->SetDivergenceAngle2(treeDivergenceAngle2);  
         ApplyCurrentRules();
         tree->Generate(treeIterations);
         treeNeedsRegeneration = false;
@@ -172,11 +172,12 @@ void Renderer::SavePresetToFile() {
     file << "Axiom=" << axiomInputBuffer << std::endl;
     file << "Iterations=" << treeIterations << std::endl;
     file << "BranchAngle=" << treeBranchAngle << std::endl;
-    file << "DivergenceAngle1=" << treeDivergenceAngle1 << std::endl;  // ADD
-    file << "DivergenceAngle2=" << treeDivergenceAngle2 << std::endl;  // ADD
+    file << "DivergenceAngle1=" << treeDivergenceAngle1 << std::endl;  
+    file << "DivergenceAngle2=" << treeDivergenceAngle2 << std::endl;  
     file << "LengthScale=" << treeLengthScale << std::endl;
     file << "RadiusScale=" << treeRadiusScale << std::endl;
     file << "LeafSize=" << leafSize << std::endl;
+    file << "Gravity=" << tropism << std::endl;
     file << "LeafDensity=" << leafDensity << std::endl;
     file << "MinLeafDepth=" << minLeafDepth << std::endl;
     
@@ -244,11 +245,9 @@ void Renderer::LoadPresetsFromFile() {
                     currentPreset.iterations = std::stoi(value);
                 } else if (key == "BranchAngle") {
                     currentPreset.branchAngle = std::stof(value);
-                } else if (key == "BranchAngle") {
-                    currentPreset.branchAngle = std::stof(value);
-                } else if (key == "DivergenceAngle1") {  // ADD THIS BLOCK
+                } else if (key == "DivergenceAngle1") {  
                     currentPreset.divergenceAngle1 = std::stof(value);
-                } else if (key == "DivergenceAngle2") {  // ADD THIS BLOCK
+                } else if (key == "DivergenceAngle2") {  
                     currentPreset.divergenceAngle2 = std::stof(value);
                 } 
                  else if (key == "LengthScale") {
@@ -282,8 +281,9 @@ void Renderer::ApplyPreset(const TreePreset& preset) {
     treeIterations = preset.iterations;
     treeBranchAngle = preset.branchAngle;
     treeLengthScale = preset.lengthScale;
-    treeDivergenceAngle1 = preset.divergenceAngle1;  // ADD
-    treeDivergenceAngle2 = preset.divergenceAngle2;  // ADD
+    tropism = preset.tropism;
+    treeDivergenceAngle1 = preset.divergenceAngle1;  
+    treeDivergenceAngle2 = preset.divergenceAngle2;  
     treeRadiusScale = preset.radiusScale;
     leafSize = preset.leafSize;
     leafDensity = preset.leafDensity;
@@ -445,7 +445,6 @@ void Renderer::RenderDebugUI(float deltaTime) {
     
     bool changed = false;
     changed |= ImGui::SliderInt("Iterations", &treeIterations, 1, 8);
-    changed |= ImGui::SliderFloat("Branch Angle", &treeBranchAngle, 10.0f, 45.0f, "%.1f deg");
     changed |= ImGui::SliderFloat("Branch Angle", &treeBranchAngle, 10.0f, 45.0f, "%.1f deg");
     changed |= ImGui::SliderFloat("Divergence Angle 1 (b)", &treeDivergenceAngle1, 0.0f, 180.0f, "%.1f deg");
     changed |= ImGui::SliderFloat("Divergence Angle 2 (e)", &treeDivergenceAngle2, 0.0f, 180.0f, "%.1f deg");

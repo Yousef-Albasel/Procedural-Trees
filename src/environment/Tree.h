@@ -36,7 +36,7 @@ struct TurtleState {
     float radius;
     int depth;
     int branchIndex;  // Track which branch this is (for divergence angles)
-    int divergenceIndex;  // ADD THIS LINE - tracks divergence rotation
+    int divergenceIndex;  
 
 };
 
@@ -82,7 +82,6 @@ public:
     void SetRadiusRandomness(float randomness) { radiusRandomness = randomness; }
     void SetTropism(const glm::vec3& tropism) { this->tropism = tropism; }
     void SetBranchProbability(float prob) { branchProbability = prob; }
-    // Add these setters
 void SetDivergenceAngle1(float angle) { divergenceAngle1 = angle; }
 void SetDivergenceAngle2(float angle) { divergenceAngle2 = angle; }
 

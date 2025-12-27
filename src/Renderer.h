@@ -22,6 +22,7 @@ struct TreePreset {
     float divergenceAngle1;  
     float divergenceAngle2;  
     int minLeafDepth;
+    float tropism;
     std::vector<std::pair<char, std::string>> rules; // symbol, replacement
 };
 
@@ -80,6 +81,7 @@ private:
     int minLeafDepth = 3;
     float treeDivergenceAngle1 = 137.5f;  // Golden angle
     float treeDivergenceAngle2 = 90.0f;   // Secondary divergence
+    float tropism = -20.0f;
     // L-System UI
     static const int MAX_RULES = 8;
     char axiomInputBuffer[256] = "F";
