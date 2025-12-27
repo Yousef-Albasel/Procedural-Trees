@@ -18,6 +18,15 @@ struct LeafInstance {
     glm::vec3 color;
 };
 
+// Structure to hold F segment parameters
+struct SegmentParams {
+    float length = 1.0f;
+    float radius = 1.0f;
+    
+    SegmentParams() = default;
+    SegmentParams(float l, float r) : length(l), radius(r) {}
+};
+
 struct TurtleState {
     glm::vec3 position;
     glm::vec3 direction;
@@ -64,9 +73,21 @@ public:
     void SetMinLeafDepth(int depth) { minLeafDepth = depth; }
     void SetRadialSegments(int segments) { radialSegments = segments; }
     
+    // New randomness parameters
+    void SetAngleRandomness(float randomness) { angleRandomness = randomness; }
+    void SetLengthRandomness(float randomness) { lengthRandomness = randomness; }
+    void SetRadiusRandomness(float randomness) { radiusRandomness = randomness; }
+    void SetTropism(const glm::vec3& tropism) { this->tropism = tropism; }
+    void SetBranchProbability(float prob) { branchProbability = prob; }
+    
     // Getters
     int GetBranchCount() const { return branchSegments.size(); }
     int GetLeafCount() const { return leafInstances.size(); }
+    float GetAngleRandomness() const { return angleRandomness; }
+    float GetLengthRandomness() const { return lengthRandomness; }
+    float GetRadiusRandomness() const { return radiusRandomness; }
+    glm::vec3 GetTropism() const { return tropism; }
+    float GetBranchProbability() const { return branchProbability; }
     
     // Texture
     void LoadLeafTexture(const std::string& texturePath);
@@ -80,6 +101,9 @@ private:
     void InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>& stack,
                         int& currentSegmentIndex);
     
+    // New: Parse parameterized segments like F(2,0.5) or F(2)
+    SegmentParams ParseSegmentParams(const std::string& str, size_t& pos);
+    
     // Continuous mesh generation
     void GenerateContinuousMesh();
     void CreateVertexRing(const glm::vec3& center, const glm::vec3& direction,
@@ -89,6 +113,11 @@ private:
                      std::vector<unsigned int>& indices);
     glm::vec3 CalculateBranchColor(int depth, float radiusRatio);
     void CalculateSegmentRadii();
+    
+    // Randomness helpers
+    float RandomFloat(float min, float max);
+    float ApplyRandomness(float value, float randomness);
+    
     // Leaf generation
     void GenerateLeavesAtEndpoints();
     void CreateLeafQuadTemplate();
@@ -110,7 +139,16 @@ private:
     float initialLength;
     float initialRadius;
     int radialSegments;
+    
+    // New randomness parameters
+    float angleRandomness;      // 0-1, adds random variation to angles
+    float lengthRandomness;     // 0-1, adds random variation to segment lengths
+    float radiusRandomness;     // 0-1, adds random variation to segment radius
+    glm::vec3 tropism;         // Directional bias (e.g., gravity, phototropism)
+    float branchProbability;    // 0-1, probability of creating branches
+    
     friend class Renderer;
+    
     // Leaf parameters
     float leafSize;
     float leafDensity;

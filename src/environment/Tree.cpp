@@ -2,6 +2,8 @@
 #include <stack>
 #include <cmath>
 #include <iostream>
+#include <sstream>
+#include <cctype>
 #define GLM_ENABLE_EXPERIMENTAL
 
 #include <glm/gtc/constants.hpp>
@@ -17,6 +19,11 @@ Tree::Tree()
       initialLength(4.0f),
       initialRadius(0.65f),
       radialSegments(8),
+      angleRandomness(0.15f),
+      lengthRandomness(0.1f),
+      radiusRandomness(0.05f),
+      tropism(0.0f, -0.2f, 0.0f),
+      branchProbability(1.0f),
       leafSize(0.3f),
       leafDensity(0.7f),
       minLeafDepth(3),
@@ -29,6 +36,7 @@ Tree::Tree()
 {
     axiom = "F";
     rules['F'] = "F[+F][-F]F";
+    srand(time(nullptr));
 }
 
 Tree::~Tree() {
@@ -61,6 +69,54 @@ void Tree::Init(const glm::vec3& pos) {
     
     std::cout << "Tree initialized at position: (" 
               << position.x << ", " << position.y << ", " << position.z << ")" << std::endl;
+}
+
+float Tree::RandomFloat(float min, float max) {
+    return min + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (max - min)));
+}
+
+float Tree::ApplyRandomness(float value, float randomness) {
+    float variation = RandomFloat(-randomness, randomness);
+    return value * (1.0f + variation);
+}
+
+SegmentParams Tree::ParseSegmentParams(const std::string& str, size_t& pos) {
+    SegmentParams params;
+    
+    // Check if there's a parameter list
+    if (pos + 1 < str.length() && str[pos + 1] == '(') {
+        size_t startPos = pos + 2;
+        size_t endPos = str.find(')', startPos);
+        
+        if (endPos != std::string::npos) {
+            std::string paramStr = str.substr(startPos, endPos - startPos);
+            
+            // Parse comma-separated values
+            size_t commaPos = paramStr.find(',');
+            
+            if (commaPos != std::string::npos) {
+                // Two parameters: F(length, radius)
+                try {
+                    params.length = std::stof(paramStr.substr(0, commaPos));
+                    params.radius = std::stof(paramStr.substr(commaPos + 1));
+                } catch (...) {
+                    std::cerr << "Failed to parse segment parameters: " << paramStr << std::endl;
+                }
+            } else {
+                // One parameter: F(length)
+                try {
+                    params.length = std::stof(paramStr);
+                } catch (...) {
+                    std::cerr << "Failed to parse segment parameter: " << paramStr << std::endl;
+                }
+            }
+            
+            // Move position past the closing parenthesis
+            pos = endPos;
+        }
+    }
+    
+    return params;
 }
 
 void Tree::CreateLeafQuadTemplate() {
@@ -177,10 +233,37 @@ void Tree::InterpretLSystemRecursive(char symbol, int depth, int maxDepth,
     
     if (shouldExpand) {
         const std::string& replacement = rules[symbol];
-        for (char c : replacement) {
-            InterpretLSystemRecursive(c, depth + 1, maxDepth, turtle, stack, currentSegmentIndex);
+        
+        // Iterate through replacement string, handling parameterized segments
+        for (size_t i = 0; i < replacement.length(); i++) {
+            char c = replacement[i];
+            
+            // Check for parameterized F
+            if (c == 'F' && i + 1 < replacement.length() && replacement[i + 1] == '(') {
+                // Parse parameters and pass to recursive call
+                std::string tempStr = replacement.substr(i);
+                size_t tempPos = 0;
+                SegmentParams params = ParseSegmentParams(tempStr, tempPos);
+                
+                // Store params temporarily in turtle for the recursive call
+                float oldLength = turtle.length;
+                float oldRadius = turtle.radius;
+                turtle.length *= params.length;
+                turtle.radius *= params.radius;
+                
+                InterpretLSystemRecursive(c, depth + 1, maxDepth, turtle, stack, currentSegmentIndex);
+                
+                turtle.length = oldLength;
+                turtle.radius = oldRadius;
+                
+                // Skip past the parameters
+                i += tempPos;
+            } else {
+                InterpretLSystemRecursive(c, depth + 1, maxDepth, turtle, stack, currentSegmentIndex);
+            }
         }
     } else {
+        // Check if this is a parameterized F at terminal level
         InterpretSymbol(symbol, turtle, stack, currentSegmentIndex);
     }
 }
@@ -190,6 +273,11 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
     switch (c) {
         case 'F': 
         case 'X': {
+            // Check for branch probability
+            if (c == 'F' && RandomFloat(0.0f, 1.0f) > branchProbability) {
+                break;
+            }
+            
             const float minLength = 0.02f;
             const float minRadius = 0.005f;
             
@@ -197,8 +285,18 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
                 break;
             }
             
-            glm::vec3 endPos = turtle.position + turtle.direction * turtle.length;
-            float endRadius = turtle.radius * radiusScale;
+            // Apply randomness to length and radius
+            float actualLength = ApplyRandomness(turtle.length, lengthRandomness);
+            float actualRadius = ApplyRandomness(turtle.radius, radiusRandomness);
+            
+            // Apply tropism (gravitational/phototropic bias)
+            glm::vec3 tropismDirection = turtle.direction + tropism;
+            if (glm::length(tropismDirection) > 0.001f) {
+                turtle.direction = glm::normalize(tropismDirection);
+            }
+            
+            glm::vec3 endPos = turtle.position + turtle.direction * actualLength;
+            float endRadius = actualRadius * radiusScale;
             
             if (endRadius < 0.01f) {
                 endRadius = 0.01f;
@@ -208,7 +306,7 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
             BranchSegment segment;
             segment.startPos = turtle.position;
             segment.endPos = endPos;
-            segment.startRadius = turtle.radius;
+            segment.startRadius = actualRadius;
             segment.endRadius = endRadius;
             segment.depth = turtle.depth;
             segment.parentIndex = currentSegmentIndex;
@@ -229,43 +327,49 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
         }
         
         case '+': {
-            float randomness = ((rand() % 100) / 100.0f - 0.5f) * 0.1f; 
-            float angleRad = glm::radians(branchAngle) + randomness;
+            // Apply angle randomness
+            float angle = ApplyRandomness(branchAngle, angleRandomness);
+            float angleRad = glm::radians(angle);
             turtle.direction = glm::rotate(turtle.direction, angleRad, turtle.up);
             turtle.right = glm::rotate(turtle.right, angleRad, turtle.up);
             break;
         }
         
         case '-': {
-            float angleRad = glm::radians(-branchAngle);
+            float angle = ApplyRandomness(branchAngle, angleRandomness);
+            float angleRad = glm::radians(-angle);
             turtle.direction = glm::rotate(turtle.direction, angleRad, turtle.up);
             turtle.right = glm::rotate(turtle.right, angleRad, turtle.up);
             break;
         }
         
         case '&': {
-            float angleRad = glm::radians(branchAngle);
+            float angle = ApplyRandomness(branchAngle, angleRandomness);
+            float angleRad = glm::radians(angle);
             turtle.direction = glm::rotate(turtle.direction, angleRad, turtle.right);
             turtle.up = glm::rotate(turtle.up, angleRad, turtle.right);
             break;
         }
         
         case '^': {
-            float angleRad = glm::radians(-branchAngle);
+            float angle = ApplyRandomness(branchAngle, angleRandomness);
+            float angleRad = glm::radians(-angle);
             turtle.direction = glm::rotate(turtle.direction, angleRad, turtle.right);
             turtle.up = glm::rotate(turtle.up, angleRad, turtle.right);
             break;
         }
         
         case '\\': {
-            float angleRad = glm::radians(branchAngle);
+            float angle = ApplyRandomness(branchAngle, angleRandomness);
+            float angleRad = glm::radians(angle);
             turtle.right = glm::rotate(turtle.right, angleRad, turtle.direction);
             turtle.up = glm::rotate(turtle.up, angleRad, turtle.direction);
             break;
         }
         
         case '/': {
-            float angleRad = glm::radians(-branchAngle);
+            float angle = ApplyRandomness(branchAngle, angleRandomness);
+            float angleRad = glm::radians(-angle);
             turtle.right = glm::rotate(turtle.right, angleRad, turtle.direction);
             turtle.up = glm::rotate(turtle.up, angleRad, turtle.direction);
             break;
@@ -274,7 +378,7 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
         case '[': {
             stack.push(turtle);
             segmentIndexStack.push(currentSegmentIndex);
-            turtle.radius *= 0.7f;
+            turtle.radius *= ApplyRandomness(0.7f, radiusRandomness);
             break;
         }
         
@@ -293,7 +397,7 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
 }
 
 void Tree::Generate(int iterations) {
-    std::cout << "Generating continuous mesh tree with " << iterations << " iterations..." << std::endl;
+    std::cout << "Generating tree with " << iterations << " iterations..." << std::endl;
     
     const int MAX_SAFE_ITERATIONS = 10;
     if (iterations > MAX_SAFE_ITERATIONS) {
@@ -333,8 +437,26 @@ void Tree::Generate(int iterations) {
     
     std::cout << "Interpreting L-System..." << std::endl;
     
-    for (char c : axiom) {
-        InterpretLSystemRecursive(c, 0, iterations, turtle, stack, currentSegmentIndex);
+    // Interpret axiom with parameterized segments
+    for (size_t i = 0; i < axiom.length(); i++) {
+        char c = axiom[i];
+        
+        // Check for parameterized F in axiom
+        if (c == 'F' && i + 1 < axiom.length() && axiom[i + 1] == '(') {
+            SegmentParams params = ParseSegmentParams(axiom, i);
+            
+            float oldLength = turtle.length;
+            float oldRadius = turtle.radius;
+            turtle.length *= params.length;
+            turtle.radius *= params.radius;
+            
+            InterpretLSystemRecursive(c, 0, iterations, turtle, stack, currentSegmentIndex);
+            
+            turtle.length = oldLength;
+            turtle.radius = oldRadius;
+        } else {
+            InterpretLSystemRecursive(c, 0, iterations, turtle, stack, currentSegmentIndex);
+        }
     }
     
     std::cout << "Branch segments created: " << branchSegments.size() << std::endl;
@@ -507,9 +629,9 @@ void Tree::GenerateLeavesAtEndpoints() {
             for (int i = 0; i < leavesPerCluster; i++) {
                 float offsetDist = leafSize * 1.0f;
                 glm::vec3 randomOffset(
-                    ((rand() % 100) / 50.0f - 1.0f) * offsetDist,
-                    ((rand() % 100) / 50.0f - 1.0f) * offsetDist,
-                    ((rand() % 100) / 50.0f - 1.0f) * offsetDist
+                    RandomFloat(-offsetDist, offsetDist),
+                    RandomFloat(-offsetDist, offsetDist),
+                    RandomFloat(-offsetDist, offsetDist)
                 );
                 
                 glm::vec3 leafPos = segment.endPos + randomOffset;
@@ -520,12 +642,12 @@ void Tree::GenerateLeavesAtEndpoints() {
                 glm::vec3 treeCenter = this->position + glm::vec3(0.0f, initialLength * 2.0f, 0.0f);
                 instance.normal = glm::normalize(leafPos - treeCenter);
                 
-                float scaleVariation = 0.9f + (rand() % 50) / 100.0f;
+                float scaleVariation = RandomFloat(0.9f, 1.4f);
                 instance.scale = glm::vec2(leafSize * scaleVariation * 1.2f);
                 
-                instance.rotation = (rand() % 360) * glm::pi<float>() / 180.0f;
+                instance.rotation = RandomFloat(0.0f, 360.0f) * glm::pi<float>() / 180.0f;
                 
-                float colorVariation = 0.85f + (rand() % 30) / 100.0f;
+                float colorVariation = RandomFloat(0.85f, 1.15f);
                 instance.color = glm::vec3(0.2f, 0.6f, 0.15f) * colorVariation;
                 
                 leafInstances.push_back(instance);

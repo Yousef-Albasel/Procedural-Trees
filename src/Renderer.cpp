@@ -51,6 +51,13 @@ void Renderer::Init() {
     tree->SetLengthScale(treeLengthScale);
     tree->SetRadiusScale(treeRadiusScale);
     
+    // Set randomness parameters (NEW)
+    tree->SetAngleRandomness(0.15f);      // 15% angle variation
+    tree->SetLengthRandomness(0.1f);      // 10% length variation
+    tree->SetRadiusRandomness(0.05f);     // 5% radius variation
+    tree->SetTropism(glm::vec3(0.0f, -0.2f, 0.0f));  // Slight downward bias (gravity)
+    tree->SetBranchProbability(1.0f);     // 100% branch probability
+    
     // Set leaf parameters
     tree->SetLeafSize(leafSize);
     tree->SetLeafDensity(leafDensity);
@@ -419,37 +426,79 @@ void Renderer::RenderDebugUI(float deltaTime) {
         ImGui::SliderFloat("Movement Speed", &movementSpeed, 10.0f, 200.0f);
     }
 
-    if (ImGui::CollapsingHeader("Tree L-System", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("L-System Parameters:");
-        
-        bool changed = false;
-        changed |= ImGui::SliderInt("Iterations", &treeIterations, 1, 8);
-        changed |= ImGui::SliderFloat("Branch Angle", &treeBranchAngle, 10.0f, 45.0f, "%.1f deg");
-        changed |= ImGui::SliderFloat("Length Scale", &treeLengthScale, 0.5f, 0.95f, "%.2f");
-        changed |= ImGui::SliderFloat("Radius Scale", &treeRadiusScale, 0.5f, 0.95f, "%.2f");
-        
-        ImGui::Separator();
-        ImGui::Text("Leaf Parameters:");
-        
-        if (ImGui::Checkbox("Render Leaves", &renderLeaves)) {
-            // Just toggle rendering, no regeneration needed
-        }
-        
-        changed |= ImGui::SliderFloat("Leaf Size", &leafSize, 0.1f, 1.0f, "%.2f");
-        changed |= ImGui::SliderFloat("Leaf Density", &leafDensity, 0.0f, 1.0f, "%.2f");
-        changed |= ImGui::SliderInt("Min Leaf Depth", &minLeafDepth, 0, 6);
-        
-        if (changed) {
-            treeNeedsRegeneration = true;
-        }
-        
-        ImGui::Separator();
-        ImGui::Text("Axiom & Rules:");
-        
-        ImGui::Text("Axiom:");
-        ImGui::SameLine();
+  if (ImGui::CollapsingHeader("Tree L-System", ImGuiTreeNodeFlags_DefaultOpen)) {
+    ImGui::Text("L-System Parameters:");
+    
+    bool changed = false;
+    changed |= ImGui::SliderInt("Iterations", &treeIterations, 1, 8);
+    changed |= ImGui::SliderFloat("Branch Angle", &treeBranchAngle, 10.0f, 45.0f, "%.1f deg");
+    changed |= ImGui::SliderFloat("Length Scale", &treeLengthScale, 0.5f, 0.95f, "%.2f");
+    changed |= ImGui::SliderFloat("Radius Scale", &treeRadiusScale, 0.5f, 0.95f, "%.2f");
+    
+    ImGui::Separator();
+    ImGui::Text("Randomness Parameters:");
+        // Get current values from tree
+    float angleRand = tree->GetAngleRandomness();
+    float lengthRand = tree->GetLengthRandomness();
+    float radiusRand = tree->GetRadiusRandomness();
+    glm::vec3 tropism = tree->GetTropism();
+    float branchProb = tree->GetBranchProbability();
+    
+    if (ImGui::SliderFloat("Angle Randomness", &angleRand, 0.0f, 0.5f, "%.2f")) {
+        tree->SetAngleRandomness(angleRand);
+        changed = true;
+    }
+    if (ImGui::SliderFloat("Length Randomness", &lengthRand, 0.0f, 0.3f, "%.2f")) {
+        tree->SetLengthRandomness(lengthRand);
+        changed = true;
+    }
+    if (ImGui::SliderFloat("Radius Randomness", &radiusRand, 0.0f, 0.2f, "%.2f")) {
+        tree->SetRadiusRandomness(radiusRand);
+        changed = true;
+    }
+    
+    ImGui::Separator();
+    ImGui::Text("Tropism (Directional Bias):");
+    if (ImGui::SliderFloat3("Tropism Vector", &tropism.x, -1.0f, 1.0f, "%.2f")) {
+        tree->SetTropism(tropism);
+        changed = true;
+    }
+    ImGui::TextDisabled("(e.g., (0, -0.2, 0) for gravity effect)");
+    
+    if (ImGui::SliderFloat("Branch Probability", &branchProb, 0.5f, 1.0f, "%.2f")) {
+        tree->SetBranchProbability(branchProb);
+        changed = true;
+    }
+    ImGui::TextDisabled("(lower = sparser tree)");
+    
+    ImGui::Separator();
+    ImGui::Text("Leaf Parameters:");
+    
+    if (ImGui::Checkbox("Render Leaves", &renderLeaves)) {
+        // Just toggle rendering, no regeneration needed
+    }
+    
+    changed |= ImGui::SliderFloat("Leaf Size", &leafSize, 0.1f, 1.0f, "%.2f");
+    changed |= ImGui::SliderFloat("Leaf Density", &leafDensity, 0.0f, 1.0f, "%.2f");
+    changed |= ImGui::SliderInt("Min Leaf Depth", &minLeafDepth, 0, 6);
+    
+    if (changed) {
+        treeNeedsRegeneration = true;
+    }
+    
+    ImGui::Separator();
+    ImGui::Text("Axiom & Rules:");
+    ImGui::TextDisabled("You can now use parameterized F segments:");
+    ImGui::BulletText("F - default length and radius");
+    ImGui::BulletText("F(2) - double length, default radius");
+    ImGui::BulletText("F(2,0.5) - double length, half radius");
+    ImGui::BulletText("F(0.5,1.5) - half length, 1.5x radius");
+    
+    ImGui::Separator();
+    
+    ImGui::Text("Axiom:");
+    ImGui::SameLine();
         if (ImGui::InputText("##Axiom", axiomInputBuffer, sizeof(axiomInputBuffer))) {
-            // Axiom changed
         }
         
         ImGui::Separator();
