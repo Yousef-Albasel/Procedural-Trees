@@ -177,7 +177,11 @@ void Renderer::SavePresetToFile() {
     file << "LengthScale=" << treeLengthScale << std::endl;
     file << "RadiusScale=" << treeRadiusScale << std::endl;
     file << "LeafSize=" << leafSize << std::endl;
-    file << "Gravity=" << tropism << std::endl;
+    glm::vec3 currentTropism = tree->GetTropism();
+    file << "TropismX=" << currentTropism.x << std::endl;
+    file << "TropismY=" << currentTropism.y << std::endl;
+    file << "TropismZ=" << currentTropism.z << std::endl;
+    file << "LeafDensity=" << leafDensity << std::endl;
     file << "LeafDensity=" << leafDensity << std::endl;
     file << "MinLeafDepth=" << minLeafDepth << std::endl;
     
@@ -256,7 +260,14 @@ void Renderer::LoadPresetsFromFile() {
                     currentPreset.radiusScale = std::stof(value);
                 } else if (key == "LeafSize") {
                     currentPreset.leafSize = std::stof(value);
-                } else if (key == "LeafDensity") {
+                } else if (key == "TropismX") {
+                    currentPreset.tropism.x = std::stof(value);
+                } else if (key == "TropismY") {
+                    currentPreset.tropism.y = std::stof(value);
+                } else if (key == "TropismZ") {
+                    currentPreset.tropism.z = std::stof(value);
+                }
+                else if (key == "LeafDensity") {
                     currentPreset.leafDensity = std::stof(value);
                 } else if (key == "MinLeafDepth") {
                     currentPreset.minLeafDepth = std::stoi(value);
@@ -281,11 +292,11 @@ void Renderer::ApplyPreset(const TreePreset& preset) {
     treeIterations = preset.iterations;
     treeBranchAngle = preset.branchAngle;
     treeLengthScale = preset.lengthScale;
-    tropism = preset.tropism;
-    treeDivergenceAngle1 = preset.divergenceAngle1;  
-    treeDivergenceAngle2 = preset.divergenceAngle2;  
     treeRadiusScale = preset.radiusScale;
     leafSize = preset.leafSize;
+    tree->SetTropism(preset.tropism); 
+    treeDivergenceAngle1 = preset.divergenceAngle1;  
+    treeDivergenceAngle2 = preset.divergenceAngle2;
     leafDensity = preset.leafDensity;
     minLeafDepth = preset.minLeafDepth;
     

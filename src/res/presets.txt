@@ -53,3 +53,21 @@ Rule=A:TF[&FA]/B[&FA]/E[&FA]
 Rule=F:F
 [END]
 
+[PRESET]
+Name=Good
+Axiom=FA
+Iterations=6
+BranchAngle=22.5
+DivergenceAngle1=114.4
+DivergenceAngle2=157.4
+LengthScale=0.95
+RadiusScale=0.74
+LeafSize=0.84
+LeafDensity=1
+MinLeafDepth=6
+Rule=X:F-[[XL]+XL]+F[+FX]-XL
+Rule=F:FF
+Rule=A:TF[&FA]/B[&FA]/E[&FA]
+Rule=F:F
+[END]
+
