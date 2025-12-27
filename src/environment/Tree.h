@@ -35,6 +35,9 @@ struct TurtleState {
     float length;
     float radius;
     int depth;
+    int branchIndex;  // Track which branch this is (for divergence angles)
+    int divergenceIndex;  // ADD THIS LINE - tracks divergence rotation
+
 };
 
 // Structure to represent a branch segment in the tree
@@ -76,14 +79,21 @@ public:
     // New randomness parameters
     void SetAngleRandomness(float randomness) { angleRandomness = randomness; }
     void SetLengthRandomness(float randomness) { lengthRandomness = randomness; }
+    void SetRadiusRandomness(float randomness) { radiusRandomness = randomness; }
     void SetTropism(const glm::vec3& tropism) { this->tropism = tropism; }
     void SetBranchProbability(float prob) { branchProbability = prob; }
-    
+    // Add these setters
+void SetDivergenceAngle1(float angle) { divergenceAngle1 = angle; }
+void SetDivergenceAngle2(float angle) { divergenceAngle2 = angle; }
+
     // Getters
+    float GetDivergenceAngle1() const { return divergenceAngle1; }
+    float GetDivergenceAngle2() const { return divergenceAngle2; }
     int GetBranchCount() const { return branchSegments.size(); }
     int GetLeafCount() const { return leafInstances.size(); }
     float GetAngleRandomness() const { return angleRandomness; }
     float GetLengthRandomness() const { return lengthRandomness; }
+    float GetRadiusRandomness() const { return radiusRandomness; }
     glm::vec3 GetTropism() const { return tropism; }
     float GetBranchProbability() const { return branchProbability; }
     
@@ -141,9 +151,12 @@ private:
     // New randomness parameters
     float angleRandomness;      // 0-1, adds random variation to angles
     float lengthRandomness;     // 0-1, adds random variation to segment lengths
+    float radiusRandomness;     // 0-1, adds random variation to segment radius
     glm::vec3 tropism;         // Directional bias (e.g., gravity, phototropism)
     float branchProbability;    // 0-1, probability of creating branches
-    
+    float divergenceAngle1;    // b - primary divergence angle
+    float divergenceAngle2;    // e - secondary divergence angle
+    int divergenceCounter;     // Track branch index for divergence rotation
     friend class Renderer;
     
     // Leaf parameters

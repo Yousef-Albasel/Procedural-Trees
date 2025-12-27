@@ -23,6 +23,9 @@ Tree::Tree()
       lengthRandomness(0.1f),
       tropism(0.0f, -0.2f, 0.0f),
       branchProbability(1.0f),
+      divergenceAngle1(137.5f),   // ADD - golden angle default
+      divergenceAngle2(90.0f),    // ADD - secondary angle
+      divergenceCounter(0),       // ADD
       leafSize(0.3f),
       leafDensity(0.7f),
       minLeafDepth(3),
@@ -382,6 +385,18 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
         case '[': {
             stack.push(turtle);
             segmentIndexStack.push(currentSegmentIndex);
+            
+            // ADD THIS BLOCK - Apply divergence rotation before branching
+            float divAngle = (turtle.divergenceIndex % 2 == 0) ? divergenceAngle1 : divergenceAngle2;
+            float divAngleRad = glm::radians(divAngle);
+            turtle.direction = glm::rotate(turtle.direction, divAngleRad, 
+                                        glm::normalize(turtle.direction));
+            turtle.right = glm::rotate(turtle.right, divAngleRad, 
+                                    glm::normalize(turtle.direction));
+            turtle.up = glm::rotate(turtle.up, divAngleRad, 
+                                glm::normalize(turtle.direction));
+            turtle.divergenceIndex++;
+            
             break;
         }
         
@@ -434,7 +449,7 @@ void Tree::Generate(int iterations) {
     turtle.length = initialLength;
     turtle.radius = initialRadius;
     turtle.depth = 0;
-    
+    turtle.divergenceIndex = 0; 
     std::stack<TurtleState> stack;
     int currentSegmentIndex = -1;
     
