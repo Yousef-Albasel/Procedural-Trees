@@ -25,7 +25,7 @@ Renderer::Renderer() {
     // Set default rule
     strcpy(axiomInputBuffer, "X");
     ruleSymbols[0] = 'X';
-    strcpy(ruleReplacements[0], "FF[+XL][-XL][&XL][^XXL]FXL");
+    strcpy(ruleReplacements[0], "FTF[+XL][-XL][&XL][^XXL]FXL");
     ruleEnabled[0] = true;
     
     // Load presets from file
@@ -54,7 +54,6 @@ void Renderer::Init() {
     // Set randomness parameters (NEW)
     tree->SetAngleRandomness(0.15f);      // 15% angle variation
     tree->SetLengthRandomness(0.1f);      // 10% length variation
-    tree->SetRadiusRandomness(0.05f);     // 5% radius variation
     tree->SetTropism(glm::vec3(0.0f, -0.2f, 0.0f));  // Slight downward bias (gravity)
     tree->SetBranchProbability(1.0f);     // 100% branch probability
     
@@ -440,7 +439,6 @@ void Renderer::RenderDebugUI(float deltaTime) {
         // Get current values from tree
     float angleRand = tree->GetAngleRandomness();
     float lengthRand = tree->GetLengthRandomness();
-    float radiusRand = tree->GetRadiusRandomness();
     glm::vec3 tropism = tree->GetTropism();
     float branchProb = tree->GetBranchProbability();
     
@@ -450,10 +448,6 @@ void Renderer::RenderDebugUI(float deltaTime) {
     }
     if (ImGui::SliderFloat("Length Randomness", &lengthRand, 0.0f, 0.3f, "%.2f")) {
         tree->SetLengthRandomness(lengthRand);
-        changed = true;
-    }
-    if (ImGui::SliderFloat("Radius Randomness", &radiusRand, 0.0f, 0.2f, "%.2f")) {
-        tree->SetRadiusRandomness(radiusRand);
         changed = true;
     }
     

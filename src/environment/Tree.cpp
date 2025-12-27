@@ -21,7 +21,6 @@ Tree::Tree()
       radialSegments(8),
       angleRandomness(0.15f),
       lengthRandomness(0.1f),
-      radiusRandomness(0.05f),
       tropism(0.0f, -0.2f, 0.0f),
       branchProbability(1.0f),
       leafSize(0.3f),
@@ -271,6 +270,15 @@ void Tree::InterpretLSystemRecursive(char symbol, int depth, int maxDepth,
 void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>& stack,
                            int& currentSegmentIndex) {
     switch (c) {
+        case 'T': {
+            // Apply tropism to current direction
+            glm::vec3 tropismDirection = turtle.direction + tropism;
+            if (glm::length(tropismDirection) > 0.001f) {
+                turtle.direction = glm::normalize(tropismDirection);
+            }
+            break;
+        }
+        
         case 'F': 
         case 'X': {
             // Check for branch probability
@@ -287,13 +295,9 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
             
             // Apply randomness to length and radius
             float actualLength = ApplyRandomness(turtle.length, lengthRandomness);
-            float actualRadius = ApplyRandomness(turtle.radius, radiusRandomness);
+            float actualRadius = turtle.radius;
             
-            // Apply tropism (gravitational/phototropic bias)
-            glm::vec3 tropismDirection = turtle.direction + tropism;
-            if (glm::length(tropismDirection) > 0.001f) {
-                turtle.direction = glm::normalize(tropismDirection);
-            }
+            // NO automatic tropism - only applied via T symbol
             
             glm::vec3 endPos = turtle.position + turtle.direction * actualLength;
             float endRadius = actualRadius * radiusScale;
@@ -378,7 +382,6 @@ void Tree::InterpretSymbol(char c, TurtleState& turtle, std::stack<TurtleState>&
         case '[': {
             stack.push(turtle);
             segmentIndexStack.push(currentSegmentIndex);
-            turtle.radius *= ApplyRandomness(0.7f, radiusRandomness);
             break;
         }
         

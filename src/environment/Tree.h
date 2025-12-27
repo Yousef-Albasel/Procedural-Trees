@@ -76,7 +76,6 @@ public:
     // New randomness parameters
     void SetAngleRandomness(float randomness) { angleRandomness = randomness; }
     void SetLengthRandomness(float randomness) { lengthRandomness = randomness; }
-    void SetRadiusRandomness(float randomness) { radiusRandomness = randomness; }
     void SetTropism(const glm::vec3& tropism) { this->tropism = tropism; }
     void SetBranchProbability(float prob) { branchProbability = prob; }
     
@@ -85,7 +84,6 @@ public:
     int GetLeafCount() const { return leafInstances.size(); }
     float GetAngleRandomness() const { return angleRandomness; }
     float GetLengthRandomness() const { return lengthRandomness; }
-    float GetRadiusRandomness() const { return radiusRandomness; }
     glm::vec3 GetTropism() const { return tropism; }
     float GetBranchProbability() const { return branchProbability; }
     
@@ -143,7 +141,6 @@ private:
     // New randomness parameters
     float angleRandomness;      // 0-1, adds random variation to angles
     float lengthRandomness;     // 0-1, adds random variation to segment lengths
-    float radiusRandomness;     // 0-1, adds random variation to segment radius
     glm::vec3 tropism;         // Directional bias (e.g., gravity, phototropism)
     float branchProbability;    // 0-1, probability of creating branches
     
